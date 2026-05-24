@@ -1,0 +1,6 @@
+2026-05-25 00:05:00 - save_data.php called
+2026-05-25 00:05:00 - Input: 
+2026-05-25 00:12:29 - save_data.php called
+2026-05-25 00:12:29 - Input: {"recorded_at":"2026-05-25 00:11","systolic":118,"diastolic":66,"map":80,"pr":93,"spo2":99,"image_path":"uploads/1779639149_ScreenshotFrom20260524234536.png"}
+2026-05-25 00:12:29 - Inserted ID: 3
+2026-05-25 00:12:30 - Telegram sent successfully
