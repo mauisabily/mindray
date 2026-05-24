@@ -1,4 +1,6 @@
 <?php
+session_start();
+
 $host = 'localhost';
 $dbname = 'sql_monitor';
 $username = 'sql_monitor';
@@ -11,8 +13,26 @@ try {
     die("Connection failed: " . $e->getMessage());
 }
 
-// GANTI DENGAN API KEY ANDA - Daftar percuma di https://ocr.space/OCRAPI
-define('OCR_API_KEY', 'K82215081688957'); // <-- Masukkan API key sebenar di sini
+function is_logged_in() {
+    return isset($_SESSION['user_id']);
+}
 
-// Jika tiada API key, sistem akan beri mesej error
+function is_admin() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+}
+
+function require_login() {
+    if (!is_logged_in()) {
+        header('Location: login.php');
+        exit;
+    }
+}
+
+function require_admin() {
+    require_login();
+    if (!is_admin()) {
+        header('Location: dashboard.php');
+        exit;
+    }
+}
 ?>

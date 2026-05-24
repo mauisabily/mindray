@@ -1,153 +1,285 @@
+<?php
+require 'config.php';
+require_login();
+
+$user_id = $_SESSION['user_id'];
+$patient_id = isset($_GET['patient_id']) ? intval($_GET['patient_id']) : 0;
+
+$stmt = $pdo->prepare("
+    SELECT p.* 
+    FROM patients p
+    WHERE p.id = ? 
+    AND (p.status = 'approved' OR ? = 'admin')
+    AND (? = 'admin' OR p.created_by = ? OR p.id IN (SELECT patient_id FROM patient_collaborators WHERE user_id = ?))
+");
+$stmt->execute([$patient_id, $_SESSION['user_role'], $_SESSION['user_role'], $user_id, $user_id]);
+$patient = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$patient) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+$stmt = $pdo->prepare("SELECT * FROM telegram_config WHERE patient_id = ?");
+$stmt->execute([$patient_id]);
+$telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
+?>
 <!DOCTYPE html>
 <html lang="ms">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Admin - Sistem Pemantauan Pesakit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Input Data - <?php echo htmlspecialchars($patient['name']); ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .btn-primary { transition: all 0.2s ease; }
-        .btn-primary:active { transform: scale(0.97); }
-        .btn-disabled { opacity: 0.5; pointer-events: none; }
+        * { font-family: 'Inter', sans-serif; }
+        body { 
+            padding-bottom: 80px; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+        .nav-item {
+            transition: all 0.2s ease;
+        }
+        .nav-item.active {
+            color: #2563eb;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        .whatsapp-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div class="max-w-lg mx-auto p-4 pb-20">
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl p-5 mb-5 shadow-lg">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold">🏥 Admin Panel</h1>
-                    <p class="text-blue-100 text-sm mt-1">Sistem Input Data Pesakit</p>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-lg mx-auto px-4 pt-6">
+        <div class="flex items-center justify-between mb-6">
+            <a href="dashboard.php" class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <div class="text-center flex-1">
+                <p class="text-gray-500 text-sm">Input Data</p>
+                <h1 class="text-xl font-bold text-gray-900"><?php echo htmlspecialchars($patient['name']); ?></h1>
+            </div>
+            <div class="w-10"></div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm p-5 mb-6">
+            <div class="flex items-center justify-between cursor-pointer" onclick="toggleTelegramConfig()">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🤖</span>
+                    <h2 class="text-lg font-semibold text-gray-800">Konfigurasi Telegram</h2>
                 </div>
-                <div class="bg-white/20 rounded-full p-3">
-                    <span class="text-2xl">📸</span>
+                <svg id="telegramArrow" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </div>
+            
+            <div id="telegramConfig" class="mt-4 hidden">
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2 text-sm">Bot Token</label>
+                    <input type="text" id="telegramBotToken" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" value="<?php echo htmlspecialchars($telegram_config['bot_token'] ?? ''); ?>">
                 </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-medium mb-2 text-sm">Chat ID</label>
+                    <input type="text" id="telegramChatId" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="-123456789" value="<?php echo htmlspecialchars($telegram_config['chat_id'] ?? ''); ?>">
+                </div>
+                <button onclick="saveTelegramConfig()" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-medium hover:opacity-90">
+                    💾 Simpan Konfigurasi
+                </button>
+                <div id="telegramMessage" class="mt-3 text-sm text-center"></div>
             </div>
         </div>
 
-        <!-- Card Form -->
-        <div class="bg-white rounded-2xl shadow-lg p-5">
-            <div class="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
-                <span class="text-green-600 text-xl">✏️</span>
+        <div class="bg-white rounded-3xl shadow-sm p-5 mb-6">
+            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
+                <span class="text-green-600 text-2xl">✏️</span>
                 <h2 class="text-lg font-semibold text-gray-800">Input Bacaan Baru</h2>
             </div>
             
             <form id="dataForm" enctype="multipart/form-data">
-                <!-- Gambar Monitor -->
-                <div class="mb-5">
-                    <label class="block text-gray-700 font-medium mb-2">
-                        📷 Gambar Monitor <span class="text-red-500">*</span>
+                <input type="hidden" id="patient_id" value="<?php echo $patient['id']; ?>">
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                        <span class="text-xl">📷</span>
+                        Gambar Monitor <span class="text-red-500">*</span>
                     </label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-blue-400 transition">
+                    <div class="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center hover:border-blue-400 transition">
                         <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden" required>
-                        <button type="button" id="cameraBtn" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
-                            📸 Ambil Gambar
-                        </button>
-                        <button type="button" id="galleryBtn" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-200 ml-2">
-                            🖼️ Pilih dari Galeri
-                        </button>
-                        <div id="imagePreview" class="mt-3 hidden">
-                            <img id="previewImg" class="rounded-xl border max-h-48 w-full object-contain bg-gray-50">
-                            <button type="button" id="removeImageBtn" class="text-red-500 text-xs mt-1">✖️ Ganti gambar</button>
+                        <div id="imagePreview" class="mb-4 hidden">
+                            <img id="previewImg" class="rounded-xl border max-h-64 w-full object-contain bg-gray-50 mx-auto">
+                            <button type="button" id="removeImageBtn" class="text-red-500 text-sm mt-3 font-medium">✖️ Ganti gambar</button>
+                        </div>
+                        <div id="uploadPlaceholder">
+                            <div class="text-4xl mb-2">📸</div>
+                            <p class="text-gray-600 mb-4">Ambil gambar monitor pesakit</p>
+                            <div class="flex gap-3 justify-center">
+                                <button type="button" id="cameraBtn" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-600">
+                                    📸 Kamera
+                                </button>
+                                <button type="button" id="galleryBtn" class="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200">
+                                    🖼️ Galeri
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Masa Bacaan -->
-                <div class="mb-4">
-                    <label class="block text-gray-700 font-medium mb-2">
-                        🕒 Masa Bacaan <span class="text-red-500">*</span>
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                        <span class="text-xl">🕒</span>
+                        Masa Bacaan <span class="text-red-500">*</span>
                     </label>
-                    <input type="datetime-local" id="datetime" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-transparent" required>
+                    <input type="datetime-local" id="datetime" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
                 
-                <!-- Tekanan Darah (NIBP) -->
-                <div class="mb-4">
-                    <label class="block text-gray-700 font-medium mb-2">
-                        ❤️ Tekanan Darah (NIBP)
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                        <span class="text-xl">❤️</span>
+                        Tekanan Darah (NIBP)
                     </label>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-3 gap-3">
                         <div>
-                            <label class="text-xs text-gray-500">Systolic <span class="text-red-500">*</span></label>
-                            <input type="number" id="systolic" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-semibold focus:ring-2 focus:ring-blue-400" placeholder="117" required>
+                            <label class="text-xs text-gray-500 mb-2 block">Systolic <span class="text-red-500">*</span></label>
+                            <input type="number" id="systolic" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="117" required>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-500">Diastolic <span class="text-red-500">*</span></label>
-                            <input type="number" id="diastolic" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-semibold focus:ring-2 focus:ring-blue-400" placeholder="59" required>
+                            <label class="text-xs text-gray-500 mb-2 block">Diastolic <span class="text-red-500">*</span></label>
+                            <input type="number" id="diastolic" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="59" required>
                         </div>
                         <div>
-                            <label class="text-xs text-gray-500">MAP <span class="text-red-500">*</span></label>
-                            <input type="number" id="map" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-semibold focus:ring-2 focus:ring-blue-400" placeholder="67" required>
+                            <label class="text-xs text-gray-500 mb-2 block">MAP <span class="text-red-500">*</span></label>
+                            <input type="number" id="map" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="67" required>
                         </div>
                     </div>
-                    <p class="text-xs text-gray-400 mt-1">📝 MAP diisi manual berdasarkan bacaan monitor</p>
+                    <p class="text-xs text-gray-400 mt-2">📝 MAP diisi manual berdasarkan bacaan monitor</p>
                 </div>
                 
-                <!-- Nadi & SpO2 -->
-                <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="grid grid-cols-2 gap-4 mb-8">
                     <div>
-                        <label class="block text-gray-700 font-medium mb-2">
-                            💓 Nadi (PR) <span class="text-red-500">*</span>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">💓</span>
+                            Nadi (PR) <span class="text-red-500">*</span>
                         </label>
-                        <input type="number" id="pr" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-semibold focus:ring-2 focus:ring-blue-400" placeholder="65" required>
+                        <input type="number" id="pr" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="65" required>
                     </div>
                     <div>
-                        <label class="block text-gray-700 font-medium mb-2">
-                            🫁 SpO₂ (%)
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">🫁</span>
+                            SpO₂ (%)
                         </label>
-                        <input type="number" id="spo2" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-semibold focus:ring-2 focus:ring-blue-400" placeholder="99">
+                        <input type="number" id="spo2" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="99">
                     </div>
                 </div>
                 
-                <!-- Butang Actions -->
-                <div class="flex gap-3">
-                    <button type="submit" id="saveBtn" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold btn-primary shadow-md">
-                        💾 Simpan & Hantar ke Telegram
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <button type="submit" id="saveBtn" class="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-2xl font-bold text-lg shadow-md active:scale-98 transition">
+                        💾 Simpan Data
                     </button>
-                    <button type="button" id="whatsappBtn" class="flex-1 bg-gradient-to-r from-teal-500 to-teal-600 text-white py-3 rounded-xl font-semibold btn-primary shadow-md btn-disabled" disabled>
-                        📱 Hantar WhatsApp
+                    <button type="button" id="whatsappBtn" onclick="copyToWhatsApp()" disabled class="whatsapp-btn w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-4 rounded-2xl font-bold text-lg shadow-md active:scale-98 transition">
+                        💬 WhatsApp
                     </button>
                 </div>
             </form>
             
-            <!-- Message Area -->
-            <div id="message" class="mt-4 text-center text-sm p-2 rounded-lg"></div>
+            <div id="message" class="mt-4 text-center text-sm p-4 rounded-xl"></div>
         </div>
-        
-        <!-- Info Footer -->
-        <div class="mt-5 text-center text-xs text-gray-400">
-            ✅ Tiada OCR - Staf taip nombor berdasarkan gambar monitor<br>
-            📸 Gambar disimpan sebagai rekod dan bukti<br>
-            🤖 Telegram akan dihantar automatik selepas simpan<br>
-            📱 WhatsApp hanya boleh dihantar SELEPAS data berjaya disimpan
+    </div>
+
+    <div class="bottom-nav">
+        <div class="max-w-lg mx-auto flex items-center justify-around py-3">
+            <a href="dashboard.php" class="nav-item flex flex-col items-center gap-1 px-4 py-2 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span class="text-xs font-medium">Home</span>
+            </a>
+            <a href="index.php?patient_id=<?php echo $patient_id; ?>" class="nav-item flex flex-col items-center gap-1 px-4 py-2 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                    <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-xs font-medium">Status</span>
+            </a>
         </div>
     </div>
 
     <script>
-        // Store last saved data for WhatsApp
         let lastSavedData = null;
+        const patientId = <?php echo $patient_id; ?>;
         
-        // Set default datetime to now (Malaysia time)
         function setDefaultDatetime() {
             const now = new Date();
-            const malaysiaTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-            const year = malaysiaTime.getUTCFullYear();
-            const month = String(malaysiaTime.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(malaysiaTime.getUTCDate()).padStart(2, '0');
-            const hours = String(malaysiaTime.getUTCHours()).padStart(2, '0');
-            const minutes = String(malaysiaTime.getUTCMinutes()).padStart(2, '0');
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
             document.getElementById('datetime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
         }
         
-        // No auto MAP calculation - manual entry only
+        function toggleTelegramConfig() {
+            const config = document.getElementById('telegramConfig');
+            const arrow = document.getElementById('telegramArrow');
+            config.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+        }
         
-        // Camera and gallery handlers
+        async function saveTelegramConfig() {
+            const botToken = document.getElementById('telegramBotToken').value.trim();
+            const chatId = document.getElementById('telegramChatId').value.trim();
+            const messageDiv = document.getElementById('telegramMessage');
+            
+            if (!botToken || !chatId) {
+                messageDiv.innerHTML = '<span class="text-red-600">❌ Sila lengkapkan semua medan</span>';
+                return;
+            }
+            
+            try {
+                const res = await fetch('api/save_telegram_config.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        patient_id: patientId,
+                        bot_token: botToken,
+                        chat_id: chatId
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    messageDiv.innerHTML = '<span class="text-green-600">✅ Konfigurasi berjaya disimpan!</span>';
+                } else {
+                    messageDiv.innerHTML = '<span class="text-red-600">❌ ' + data.error + '</span>';
+                }
+            } catch (err) {
+                messageDiv.innerHTML = '<span class="text-red-600">❌ Ralat: ' + err.message + '</span>';
+            }
+        }
+        
         const imageInput = document.getElementById('imageInput');
         const previewDiv = document.getElementById('imagePreview');
         const previewImg = document.getElementById('previewImg');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
         const saveBtn = document.getElementById('saveBtn');
         const whatsappBtn = document.getElementById('whatsappBtn');
         
@@ -162,96 +294,136 @@
         document.getElementById('removeImageBtn')?.addEventListener('click', () => {
             imageInput.value = '';
             previewDiv.classList.add('hidden');
+            uploadPlaceholder.classList.remove('hidden');
             previewImg.src = '';
-            // Reset WhatsApp button when new image is selected
-            whatsappBtn.disabled = true;
-            whatsappBtn.classList.add('btn-disabled');
-            lastSavedData = null;
         });
         
-        // Preview image when selected
         imageInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function(event) {
+                reader.onload = async function(event) {
                     previewImg.src = event.target.result;
                     previewDiv.classList.remove('hidden');
+                    uploadPlaceholder.classList.add('hidden');
+                    
+                    await scanOCR(file);
                 };
                 reader.readAsDataURL(file);
             }
-            // Reset WhatsApp button when new image is selected
-            whatsappBtn.disabled = true;
-            whatsappBtn.classList.add('btn-disabled');
-            lastSavedData = null;
         });
         
-        // Format date to Malay readable format
-        function formatDateToMalay(datetimeStr) {
-            if (!datetimeStr) return '';
-            const months = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 
-                            'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
-            const date = new Date(datetimeStr);
-            const malaysiaDate = new Date(date.getTime() + (8 * 60 * 60 * 1000));
-            const day = malaysiaDate.getUTCDate();
-            const month = months[malaysiaDate.getUTCMonth()];
-            const year = malaysiaDate.getUTCFullYear();
-            const hours = String(malaysiaDate.getUTCHours()).padStart(2, '0');
-            const minutes = String(malaysiaDate.getUTCMinutes()).padStart(2, '0');
-            return `${hours}:${minutes}, ${day} ${month} ${year}`;
-        }
-        
-        // Get status for BP
-        function getBPStatus(systolic, diastolic) {
-            if (systolic < 90 || diastolic < 60) return '⚠️ Rendah';
-            if (systolic > 140 || diastolic > 90) return '⚠️ Tinggi';
-            return '✅ Normal';
-        }
-        
-        // Get status for PR
-        function getPRStatus(pr) {
-            if (pr < 60) return '😴 Perlahan';
-            if (pr > 100) return '🏃 Cepat';
-            return '😊 Tenang';
-        }
-        
-        // Get status for SpO2
-        function getSpO2Status(spo2) {
-            if (!spo2) return '';
-            if (spo2 < 90) return '⚠️ Rendah';
-            if (spo2 < 95) return '⚡ Sederhana';
-            return '✅ Baik';
-        }
-        
-        // Build WhatsApp message
-        function buildWhatsAppMessage(data) {
-            const formattedDate = formatDateToMalay(data.datetime);
-            const bpStatus = getBPStatus(data.systolic, data.diastolic);
-            const prStatus = getPRStatus(data.pr);
-            const spo2Status = getSpO2Status(data.spo2);
+        async function scanOCR(file) {
+            showMessage('🤖 Mengimbas gambar dengan AI...', 'blue');
             
-            let msg = `━━━━━━━━━━━━━━━━━━━━━━━━━━%0A`;
-            msg += `🩺 *STATUS PESAKIT TERKINI*%0A`;
-            msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━%0A%0A`;
-            msg += `❤️ *Tekanan Darah:* ${data.systolic}/${data.diastolic} mmHg%0A`;
-            msg += `   ↳ ${bpStatus}%0A%0A`;
-            msg += `💓 *Nadi:* ${data.pr} bpm%0A`;
-            msg += `   ↳ ${prStatus}%0A%0A`;
-            if (data.spo2) {
-                msg += `🫁 *Oksigen:* ${data.spo2}%%0A`;
-                msg += `   ↳ ${spo2Status}%0A%0A`;
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            try {
+                const res = await fetch('api/ocr.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('systolic').value = data.data.systolic;
+                    document.getElementById('diastolic').value = data.data.diastolic;
+                    document.getElementById('map').value = data.data.map;
+                    document.getElementById('pr').value = data.data.pr;
+                    if (data.data.spo2) {
+                        document.getElementById('spo2').value = data.data.spo2;
+                    }
+                    showMessage('✅ Data berjaya diekstrak!', 'green');
+                } else {
+                    showMessage('⚠️ Gagal mengekstrak data, sila isi manual', 'red');
+                }
+            } catch (err) {
+                showMessage('⚠️ Ralat OCR, sila isi manual', 'red');
             }
-            msg += `⏰ *Masa:* ${formattedDate}%0A%0A`;
-            msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━%0A`;
-            msg += `ℹ️ *Makluman:*%0A`;
-            msg += `Jika nombor keluar dari julat normal,%0A`;
-            msg += `staf wad akan menghubungi anda.%0A%0A`;
-            msg += `_Sistem Pemantauan Pesakit - Wad_`;
-            
-            return msg;
         }
         
-        // Handle form submit (Save & Send to Telegram)
+        function showMessage(text, color) {
+            const messageDiv = document.getElementById('message');
+            const colorMap = {
+                'red': 'text-red-600 bg-red-50',
+                'green': 'text-green-600 bg-green-50',
+                'blue': 'text-blue-600 bg-blue-50'
+            };
+            messageDiv.innerHTML = `<span class="${colorMap[color]} p-4 block rounded-xl font-medium">${text}</span>`;
+        }
+        
+        function generateWhatsAppText() {
+            if (!lastSavedData) return null;
+            
+            const data = lastSavedData;
+            const patientName = '<?php echo addslashes($patient['name']); ?>';
+            
+            const date = new Date(data.recorded_at.replace(' ', 'T'));
+            const months = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis'];
+            const formattedDate = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}, ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+            
+            let bp_status = '';
+            if (data.map < 70) {
+                bp_status = '⚠️ Tekanan darah rendah';
+            } else if (data.map > 100) {
+                bp_status = '⚠️ Tekanan darah tinggi';
+            } else {
+                bp_status = '✅ Tekanan darah normal';
+            }
+            
+            let pr_status = '';
+            if (data.pr < 60) {
+                pr_status = '😴 Nadi perlahan';
+            } else if (data.pr > 100) {
+                pr_status = '🏃 Nadi laju';
+            } else {
+                pr_status = '😊 Nadi tenang';
+            }
+            
+            let spo2_status = '';
+            if (data.spo2) {
+                if (data.spo2 < 95) {
+                    spo2_status = '⚠️ Oksigen rendah';
+                } else {
+                    spo2_status = '✅ Oksigen baik';
+                }
+            }
+            
+            let text = `📋 Bacaan Pesakit: ${patientName}\n`;
+            text += `📅 Masa: ${formattedDate}\n\n`;
+            text += `❤️ Tekanan Darah: ${data.systolic}/${data.diastolic} mmHg\n`;
+            text += `🩸 MAP: ${data.map} mmHg\n`;
+            text += `   ${bp_status}\n\n`;
+            text += `💓 Nadi: ${data.pr} bpm\n`;
+            text += `   ${pr_status}`;
+            if (data.spo2) {
+                text += `\n\n🫁 Oksigen: ${data.spo2}%\n`;
+                text += `   ${spo2_status}`;
+            }
+            
+            return text;
+        }
+        
+        async function copyToWhatsApp() {
+            const text = generateWhatsAppText();
+            if (!text) {
+                showMessage('❌ Sila simpan data terlebih dahulu', 'red');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(text);
+                showMessage('✅ Data disalin ke papan keratan!', 'green');
+                
+                setTimeout(() => {
+                    window.open('https://wa.me/', '_blank');
+                }, 500);
+            } catch (err) {
+                showMessage('❌ Gagal menyalin data', 'red');
+            }
+        }
+        
         document.getElementById('dataForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -278,7 +450,6 @@
                 return;
             }
             
-            // Disable save button to prevent double submit
             saveBtn.disabled = true;
             saveBtn.innerHTML = '⏳ Menyimpan...';
             showMessage('📤 Menyimpan data...', 'blue');
@@ -287,7 +458,6 @@
             formData.append('image', imageFile);
             
             try {
-                // Upload image
                 const uploadRes = await fetch('api/upload_image.php', {
                     method: 'POST',
                     body: formData
@@ -301,6 +471,7 @@
                 const recordedAt = datetime.replace('T', ' ');
                 
                 const payload = {
+                    patient_id: patientId,
                     recorded_at: recordedAt,
                     systolic: systolic,
                     diastolic: diastolic,
@@ -310,7 +481,6 @@
                     image_path: uploadData.image_path
                 };
                 
-                // Save data and send Telegram
                 const saveRes = await fetch('api/save_data.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -319,67 +489,21 @@
                 const saveData = await saveRes.json();
                 
                 if (saveData.success) {
-                    // Store saved data for WhatsApp
-                    lastSavedData = {
-                        datetime: datetime,
-                        systolic: systolic,
-                        diastolic: diastolic,
-                        map: map,
-                        pr: pr,
-                        spo2: spo2
-                    };
-                    
-                    // Enable WhatsApp button now that data is saved
+                    lastSavedData = payload;
                     whatsappBtn.disabled = false;
-                    whatsappBtn.classList.remove('btn-disabled');
-                    
-                    showMessage('✅ Data disimpan & Telegram dihantar ke keluarga! Kini boleh hantar WhatsApp', 'green');
-                    
-                    // Reset form but keep last saved data for WhatsApp
-                    document.getElementById('dataForm').reset();
-                    document.getElementById('imagePreview').classList.add('hidden');
-                    document.getElementById('previewImg').src = '';
-                    setDefaultDatetime();
-                    
-                    // Reset save button
+                    showMessage('✅ Data berjaya disimpan! Klik WhatsApp untuk hantar.', 'green');
                     saveBtn.disabled = false;
-                    saveBtn.innerHTML = '💾 Simpan & Hantar ke Telegram';
-                    
-                    setTimeout(() => {
-                        document.getElementById('message').innerHTML = '';
-                    }, 5000);
+                    saveBtn.innerHTML = '💾 Simpan Data';
                 } else {
                     throw new Error(saveData.error || 'Gagal simpan');
                 }
             } catch (err) {
                 showMessage(`❌ Error: ${err.message}`, 'red');
                 saveBtn.disabled = false;
-                saveBtn.innerHTML = '💾 Simpan & Hantar ke Telegram';
+                saveBtn.innerHTML = '💾 Simpan Data';
             }
         });
         
-        // WhatsApp send button - ONLY after data is saved
-        document.getElementById('whatsappBtn').addEventListener('click', () => {
-            if (!lastSavedData) {
-                showMessage('❌ Sila simpan data terlebih dahulu sebelum hantar WhatsApp', 'red');
-                return;
-            }
-            
-            const msg = buildWhatsAppMessage(lastSavedData);
-            window.open(`https://wa.me/?text=${msg}`, '_blank');
-        });
-        
-        function showMessage(text, color) {
-            const messageDiv = document.getElementById('message');
-            const colorMap = {
-                'red': 'text-red-600 bg-red-50',
-                'green': 'text-green-600 bg-green-50',
-                'blue': 'text-blue-600 bg-blue-50'
-            };
-            messageDiv.innerHTML = `<span class="${colorMap[color]} p-2 block rounded-lg">${text}</span>`;
-        }
-        
-        // Initialize
         setDefaultDatetime();
     </script>
 </body>
