@@ -115,6 +115,49 @@ try {
             }
             echo "✅ Added 'created_by' column to patient_readings table<br>";
         }
+        
+        // Add new vital signs columns
+        $newColumns = [
+            'temperature' => 'DECIMAL(4,1) DEFAULT NULL AFTER spo2',
+            'respiratory_rate' => 'INT DEFAULT NULL AFTER temperature',
+            'etco2' => 'INT DEFAULT NULL AFTER respiratory_rate',
+            'cvp' => 'INT DEFAULT NULL AFTER etco2',
+            'icp' => 'INT DEFAULT NULL AFTER cvp'
+        ];
+        
+        foreach ($newColumns as $col => $definition) {
+            $stmt = $pdo->query("SHOW COLUMNS FROM patient_readings LIKE '$col'");
+            if (!$stmt->fetch()) {
+                $pdo->exec("ALTER TABLE patient_readings ADD COLUMN $col $definition");
+                echo "✅ Added '$col' column to patient_readings table<br>";
+            } else {
+                echo "ℹ️ '$col' column already exists in patient_readings table<br>";
+            }
+        }
+    } else {
+        $pdo->exec("
+            CREATE TABLE patient_readings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_id INT NOT NULL,
+                recorded_at DATETIME NOT NULL,
+                systolic INT NOT NULL,
+                diastolic INT NOT NULL,
+                map INT NOT NULL,
+                pr INT NOT NULL,
+                spo2 INT DEFAULT NULL,
+                temperature DECIMAL(4,1) DEFAULT NULL,
+                respiratory_rate INT DEFAULT NULL,
+                etco2 INT DEFAULT NULL,
+                cvp INT DEFAULT NULL,
+                icp INT DEFAULT NULL,
+                image_path VARCHAR(255),
+                created_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ");
+        echo "✅ Created 'patient_readings' table<br>";
     }
     
     // 5. Create/update telegram_config table

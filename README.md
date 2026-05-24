@@ -1,6 +1,3 @@
-## 📄 README.md
-
-```markdown
 # 🏥 Sistem Pemantauan Pesakit Koma - Keluarga
 
 Sistem web ringkas untuk membantu **keluarga pesakit koma** memantau status terkini pesakit (Tekanan Darah, Nadi, SpO₂) dalam bahasa mudah. Direka untuk kegunaan di wad hospital dengan jaringan terhad.

@@ -31,6 +31,11 @@ $diastolic = (int)$input['diastolic'];
 $map = (int)$input['map'];
 $pr = (int)$input['pr'];
 $spo2 = isset($input['spo2']) && !empty($input['spo2']) ? (int)$input['spo2'] : null;
+$temperature = isset($input['temperature']) && !empty($input['temperature']) ? (float)$input['temperature'] : null;
+$respiratory_rate = isset($input['respiratory_rate']) && !empty($input['respiratory_rate']) ? (int)$input['respiratory_rate'] : null;
+$etco2 = isset($input['etco2']) && !empty($input['etco2']) ? (int)$input['etco2'] : null;
+$cvp = isset($input['cvp']) && !empty($input['cvp']) ? (int)$input['cvp'] : null;
+$icp = isset($input['icp']) && !empty($input['icp']) ? (int)$input['icp'] : null;
 $image_path = $input['image_path'] ?? null;
 
 $stmt = $pdo->prepare("
@@ -95,7 +100,7 @@ if ($telegram_config) {
         }
     }
     
-    $message = "📋 *Bacaan Pesakit*\n";
+    $message = "📋 *Bacaan Pesakit Koma*\n";
     $message .= "👤 Nama: *" . $patient['name'] . "*\n";
     $message .= "📅 Masa: $formattedDate\n\n";
     $message .= "❤️ Tekanan Darah: $systolic/$diastolic mmHg\n";
@@ -106,6 +111,21 @@ if ($telegram_config) {
     if ($spo2) {
         $message .= "\n🫁 Oksigen: $spo2%\n";
         $message .= "   $spo2_status\n";
+    }
+    if ($temperature) {
+        $message .= "\n🌡️ Suhu: $temperature°C\n";
+    }
+    if ($respiratory_rate) {
+        $message .= "💨 Kadar Pernafasan: $respiratory_rate breaths/min\n";
+    }
+    if ($etco2) {
+        $message .= "🫧 EtCO₂: $etco2 mmHg\n";
+    }
+    if ($cvp) {
+        $message .= "💉 CVP: $cvp mmHg\n";
+    }
+    if ($icp) {
+        $message .= "🧠 ICP: $icp mmHg\n";
     }
     
     $telegramUrl = "https://api.telegram.org/bot" . $telegram_config['bot_token'] . "/sendMessage";

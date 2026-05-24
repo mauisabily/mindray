@@ -37,17 +37,42 @@ $imageData = file_get_contents($image['tmp_name']);
 $base64Image = base64_encode($imageData);
 
 $prompt = <<<'EOT'
-You are a medical monitor OCR assistant. Analyze the medical monitor image and extract the following vital signs as integers. Return ONLY a valid JSON object without any extra text or markdown.
+You are a medical monitor OCR assistant for Mindray uMEC10. Analyze the image very carefully and extract the EXACT values from their specific locations.
 
-Fields to extract:
-- systolic: systolic blood pressure (top number)
-- diastolic: diastolic blood pressure (bottom number)
-- map: mean arterial pressure
-- pr: pulse rate (heart rate)
-- spo2: oxygen saturation percentage (can be null if not visible)
+CRITICAL LOCATIONS ON THIS MONITOR (DO NOT MIX UP VALUES):
 
-Example output:
-{"systolic": 120, "diastolic": 80, "map": 90, "pr": 75, "spo2": 98}
+1. NIBP area (bottom right of screen):
+   - Shows as "SYS/DIA (MAP)" like "119/72 (80)"
+   - systolic = the FIRST number before / (e.g., 119)
+   - diastolic = the SECOND number after / (e.g., 72)
+   - map = the number in PARENTHESES (e.g., 80)
+
+2. SpO2 area (right side, large number):
+   - spo2 = the large number shown with SpO2 label (e.g., 100)
+
+3. PR area (in the list or next to SpO2):
+   - pr = the number labeled PR (pulse rate) from the list (e.g., 80, 82, etc.)
+
+4. Additional vital signs (if visible):
+   - temperature: body temperature in °C
+   - respiratory_rate: respiratory rate (breaths per minute)
+   - etco2: End-tidal CO2 in mmHg
+   - cvp: Central Venous Pressure in mmHg
+   - icp: Intracranial Pressure in mmHg
+
+RETURN ONLY A VALID JSON OBJECT, NO OTHER TEXT:
+{
+  "systolic": number or null,
+  "diastolic": number or null,
+  "map": number or null,
+  "pr": number or null,
+  "spo2": number or null,
+  "temperature": number or null,
+  "respiratory_rate": number or null,
+  "etco2": number or null,
+  "cvp": number or null,
+  "icp": number or null
+}
 EOT;
 
 $ollamaUrl = 'http://192.168.1.50:11434/api/generate';

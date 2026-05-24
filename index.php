@@ -87,7 +87,33 @@ if (!$patient) {
                 </div>
                 <div class="vital-card bg-purple-50 rounded-2xl p-4 text-center">
                     <div class="text-3xl font-bold text-purple-600" id="spo2">--</div>
-                    <div class="text-xs text-gray-500 mt-1">Oksigen</div>
+                    <div class="text-xs text-gray-500 mt-1">Oksigen (%)</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="vital-card bg-orange-50 rounded-2xl p-4 text-center">
+                    <div class="text-2xl font-bold text-orange-600" id="temperature">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Suhu (°C)</div>
+                </div>
+                <div class="vital-card bg-cyan-50 rounded-2xl p-4 text-center">
+                    <div class="text-2xl font-bold text-cyan-600" id="respiratory_rate">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Kadar Pernafasan</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="vital-card bg-teal-50 rounded-2xl p-4 text-center">
+                    <div class="text-xl font-bold text-teal-600" id="etco2">--</div>
+                    <div class="text-xs text-gray-500 mt-1">EtCO₂ (mmHg)</div>
+                </div>
+                <div class="vital-card bg-indigo-50 rounded-2xl p-4 text-center">
+                    <div class="text-xl font-bold text-indigo-600" id="cvp">--</div>
+                    <div class="text-xs text-gray-500 mt-1">CVP (mmHg)</div>
+                </div>
+                <div class="vital-card bg-pink-50 rounded-2xl p-4 text-center">
+                    <div class="text-xl font-bold text-pink-600" id="icp">--</div>
+                    <div class="text-xs text-gray-500 mt-1">ICP (mmHg)</div>
                 </div>
             </div>
             
@@ -98,10 +124,17 @@ if (!$patient) {
         </div>
 
         <div class="bg-white rounded-3xl shadow-sm p-5 mb-6">
-            <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <span class="text-xl">📈</span>
-                Trend 5 Bacaan Terakhir
-            </h3>
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                    <span class="text-xl">📈</span>
+                    Trend Bacaan
+                </h3>
+                <div class="flex gap-2">
+                    <button id="btn5" onclick="switchHistory(5)" class="px-3 py-1 text-sm rounded-full bg-blue-600 text-white">5</button>
+                    <button id="btn10" onclick="switchHistory(10)" class="px-3 py-1 text-sm rounded-full bg-gray-200 text-gray-600">10</button>
+                    <button id="btn25" onclick="switchHistory(25)" class="px-3 py-1 text-sm rounded-full bg-gray-200 text-gray-600">25</button>
+                </div>
+            </div>
             <canvas id="trendChart" height="200"></canvas>
         </div>
 
@@ -130,6 +163,7 @@ if (!$patient) {
 
     <script>
         let chart;
+        let currentLimit = 5;
         const patientId = <?php echo $patient_id; ?>;
 
         async function loadData() {
@@ -141,6 +175,11 @@ if (!$patient) {
                     document.getElementById('bp').innerText = `${latest.systolic}/${latest.diastolic}`;
                     document.getElementById('pr').innerText = latest.pr;
                     document.getElementById('spo2').innerText = latest.spo2 || '--';
+                    document.getElementById('temperature').innerText = latest.temperature ? latest.temperature.toFixed(1) : '--';
+                    document.getElementById('respiratory_rate').innerText = latest.respiratory_rate || '--';
+                    document.getElementById('etco2').innerText = latest.etco2 || '--';
+                    document.getElementById('cvp').innerText = latest.cvp || '--';
+                    document.getElementById('icp').innerText = latest.icp || '--';
                     
                     const date = new Date(latest.recorded_at);
                     const months = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis'];
@@ -161,7 +200,7 @@ if (!$patient) {
                     document.getElementById('prStatus').innerHTML = prMsg;
                 }
                 
-                const historyRes = await fetch(`api/get_history.php?patient_id=${patientId}`);
+                const historyRes = await fetch(`api/get_history.php?patient_id=${patientId}&limit=${currentLimit}`);
                 const history = await historyRes.json();
                 
                 if (history.length > 0 && chart) {
@@ -176,6 +215,14 @@ if (!$patient) {
             } catch (error) {
                 console.error('Error loading data:', error);
             }
+        }
+
+        function switchHistory(limit) {
+            currentLimit = limit;
+            document.getElementById('btn5').className = `px-3 py-1 text-sm rounded-full ${limit === 5 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+            document.getElementById('btn10').className = `px-3 py-1 text-sm rounded-full ${limit === 10 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+            document.getElementById('btn25').className = `px-3 py-1 text-sm rounded-full ${limit === 25 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+            loadData();
         }
         
         const ctx = document.getElementById('trendChart').getContext('2d');

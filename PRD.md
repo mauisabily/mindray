@@ -1,7 +1,7 @@
-# Sistem Pemantauan Pesakit - Product Requirements Document (PRD)
+# Sistem Pemantauan Pesakit Koma - Product Requirements Document (PRD)
 
 ## 📋 Gambaran Keseluruhan
-Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan admin, dan integrasi Telegram & WhatsApp.
+Sistem SaaS untuk memantau pesakit koma dengan ciri log masuk pengguna, kelulusan admin, dan integrasi Telegram & WhatsApp.
 
 ## 🎯 Matlamat
 - Membolehkan pengguna mendaftar dan log masuk
@@ -9,6 +9,8 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 - Memerlukan kelulusan admin sebelum pesakit boleh diakses
 - Auto hantar bacaan ke Telegram selepas simpan
 - Butang WhatsApp untuk copy data dan buka WhatsApp
+- Tambah vital signs tambahan untuk pesakit koma (suhu badan, kadar pernafasan, EtCO₂, CVP, ICP)
+- Lihat sejarah bacaan lebih panjang (10 dan 25 bacaan terakhir)
 
 ---
 
@@ -40,8 +42,8 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 3. Pengguna tambah pesakit baru di `dashboard.php` → status pending
 4. Admin log masuk ke `admin_dashboard.php` dan luluskan pesakit
 5. Pengguna boleh:
-   - Lihat status pesakit di `index.php`
-   - Keyin data dan muat naik gambar di `admin.php`
+   - Lihat status pesakit di `index.php` (dengan 10 dan 25 bacaan terakhir)
+   - Keyin data dan muat naik gambar di `admin.php` (termasuk vital signs tambahan)
    - Konfigurasi Telegram di `admin.php`
    - Jemput pengguna lain di `dashboard.php`
 6. Selepas simpan data, mesej auto dihantar ke Telegram
@@ -95,6 +97,11 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 | map | INT | Mean Arterial Pressure |
 | pr | INT | Nadi (Pulse Rate) |
 | spo2 | INT (NULL) | Oksigen (SpO₂) |
+| temperature | DECIMAL(4,1) (NULL) | Suhu badan (°C) |
+| respiratory_rate | INT (NULL) | Kadar pernafasan (breaths/min) |
+| etco2 | INT (NULL) | End-tidal CO₂ (mmHg) |
+| cvp | INT (NULL) | Central Venous Pressure (mmHg) |
+| icp | INT (NULL) | Intracranial Pressure (mmHg) |
 | image_path | VARCHAR(255) | Laluan gambar monitor |
 | created_by | INT (FK) | ID pengguna yang menyimpan |
 | created_at | TIMESTAMP | Tarikh simpan |
@@ -117,8 +124,8 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 | `login.php` | Halaman log masuk | Semua |
 | `register.php` | Halaman daftar akaun | Semua |
 | `dashboard.php` | Dashboard pengguna (mobile-first) | Pengguna & Admin |
-| `index.php` | Status pesakit (mobile-first) | Pengguna & Admin |
-| `admin.php` | Input data pesakit (mobile-first) | Pengguna & Admin |
+| `index.php` | Status pesakit (mobile-first, 10 & 25 bacaan) | Pengguna & Admin |
+| `admin.php` | Input data pesakit (mobile-first, vital signs tambahan) | Pengguna & Admin |
 | `admin_dashboard.php` | Dashboard admin (desktop-first) | Admin sahaja |
 | `logout.php` | Log keluar | Semua yang log masuk |
 
@@ -131,8 +138,9 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 | `api/upload_image.php` | POST | Muat naik gambar monitor |
 | `api/save_data.php` | POST | Simpan bacaan pesakit & hantar Telegram |
 | `api/get_latest.php` | GET | Dapatkan bacaan terkini pesakit |
-| `api/get_history.php` | GET | Dapatkan 5 bacaan terakhir pesakit |
+| `api/get_history.php` | GET | Dapatkan bacaan terakhir pesakit (parameter limit: 10 atau 25) |
 | `api/save_telegram_config.php` | POST | Simpan konfigurasi Telegram pesakit |
+| `api/ocr.php` | POST | Ekstrak data dari gambar monitor dengan AI (Ollama) |
 
 ---
 
@@ -140,14 +148,19 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 
 ### Format Mesej Telegram
 ```
-📋 *Bacaan Pesakit Baru*
+📋 *Bacaan Pesakit Koma Baru*
 👤 Nama: *Nama Pesakit*
 📅 Masa: 25 Mei 2026, 14:30
 
-❤️ *Tekanan Darah*: 117/59 mmHg
-🩸 *MAP*: 67 mmHg
-💓 *Nadi*: 65 bpm
-🫁 *SpO₂*: 99%
+❤️ *Tekanan Darah*: 119/72 mmHg
+🩸 *MAP*: 80 mmHg
+💓 *Nadi*: 80 bpm
+🫁 *SpO₂*: 100%
+🌡️ *Suhu*: 36.5°C
+💨 *Kadar Pernafasan*: 18 breaths/min
+🫧 *EtCO₂*: 35 mmHg
+💉 *CVP*: 8 mmHg
+🧠 *ICP*: 15 mmHg
 ```
 
 ---
@@ -156,13 +169,18 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 
 ### Format Mesej WhatsApp
 ```
-📋 Bacaan Pesakit: Nama Pesakit
+📋 Bacaan Pesakit Koma: Nama Pesakit
 📅 Masa: 25 Mei 2026, 14:30
 
-❤️ Tekanan Darah: 117/59 mmHg
-🩸 MAP: 67 mmHg
-💓 Nadi: 65 bpm
-🫁 SpO₂: 99%
+❤️ Tekanan Darah: 119/72 mmHg
+🩸 MAP: 80 mmHg
+💓 Nadi: 80 bpm
+🫁 SpO₂: 100%
+🌡️ Suhu: 36.5°C
+💨 Kadar Pernafasan: 18 breaths/min
+🫧 EtCO₂: 35 mmHg
+💉 CVP: 8 mmHg
+🧠 ICP: 15 mmHg
 ```
 
 ---
@@ -186,9 +204,10 @@ Sistem SaaS untuk memantau pesakit dengan ciri log masuk pengguna, kelulusan adm
 - ✅ Autentikasi pengguna (log masuk & daftar)
 - ✅ Kelulusan pesakit oleh admin
 - ✅ Kolaborasi pengguna pada pesakit
-- ✅ Input data bacaan dengan gambar
-- ✅ Paparan status dan graf trend
+- ✅ Input data bacaan dengan gambar (termasuk vital signs tambahan untuk pesakit koma)
+- ✅ Paparan status dan graf trend (10 dan 25 bacaan terakhir)
 - ✅ Auto hantar ke Telegram
 - ✅ Butang WhatsApp (copy & buka)
 - ✅ UI mobile-first untuk pengguna
 - ✅ UI desktop-first untuk admin
+- ✅ OCR dengan AI (Ollama) untuk ekstrak data dari gambar

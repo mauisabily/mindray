@@ -174,7 +174,7 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
                     <p class="text-xs text-gray-400 mt-2">📝 MAP diisi manual berdasarkan bacaan monitor</p>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="grid grid-cols-2 gap-4 mb-6">
                     <div>
                         <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
                             <span class="text-xl">💓</span>
@@ -188,6 +188,47 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
                             SpO₂ (%)
                         </label>
                         <input type="number" id="spo2" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="99">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">🌡️</span>
+                            Suhu badan (°C)
+                        </label>
+                        <input type="number" step="0.1" id="temperature" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="36.5">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">💨</span>
+                            Kadar Pernafasan
+                        </label>
+                        <input type="number" id="respiratory_rate" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="18">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">🫧</span>
+                            EtCO₂ (mmHg)
+                        </label>
+                        <input type="number" id="etco2" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="35">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">💉</span>
+                            CVP (mmHg)
+                        </label>
+                        <input type="number" id="cvp" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="8">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-3 flex items-center gap-2">
+                            <span class="text-xl">🧠</span>
+                            ICP (mmHg)
+                        </label>
+                        <input type="number" id="icp" class="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center text-2xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="15">
                     </div>
                 </div>
                 
@@ -314,7 +355,7 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
         });
         
         async function scanOCR(file) {
-            showMessage('🤖 Mengimbas gambar dengan AI...', 'blue');
+            showMessage('🤖 Mengimbas gambar dengan AI... Sila semak data selepas!', 'blue');
             
             const formData = new FormData();
             formData.append('image', file);
@@ -327,14 +368,12 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
                 const data = await res.json();
                 
                 if (data.success) {
-                    document.getElementById('systolic').value = data.data.systolic;
-                    document.getElementById('diastolic').value = data.data.diastolic;
-                    document.getElementById('map').value = data.data.map;
-                    document.getElementById('pr').value = data.data.pr;
-                    if (data.data.spo2) {
-                        document.getElementById('spo2').value = data.data.spo2;
-                    }
-                    showMessage('✅ Data berjaya diekstrak!', 'green');
+                    if (data.data.systolic) document.getElementById('systolic').value = data.data.systolic;
+                    if (data.data.diastolic) document.getElementById('diastolic').value = data.data.diastolic;
+                    if (data.data.map) document.getElementById('map').value = data.data.map;
+                    if (data.data.pr) document.getElementById('pr').value = data.data.pr;
+                    if (data.data.spo2) document.getElementById('spo2').value = data.data.spo2;
+                    showMessage('✅ Data diekstrak! SILA SEMAK DAN BETULKAN JIKA SALAH!', 'green');
                 } else {
                     showMessage('⚠️ Gagal mengekstrak data, sila isi manual', 'red');
                 }
@@ -390,7 +429,7 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
                 }
             }
             
-            let text = `📋 Bacaan Pesakit: ${patientName}\n`;
+            let text = `📋 Bacaan Pesakit Koma: ${patientName}\n`;
             text += `📅 Masa: ${formattedDate}\n\n`;
             text += `❤️ Tekanan Darah: ${data.systolic}/${data.diastolic} mmHg\n`;
             text += `🩸 MAP: ${data.map} mmHg\n`;
@@ -400,6 +439,21 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
             if (data.spo2) {
                 text += `\n\n🫁 Oksigen: ${data.spo2}%\n`;
                 text += `   ${spo2_status}`;
+            }
+            if (data.temperature) {
+                text += `\n\n🌡️ Suhu: ${data.temperature}°C`;
+            }
+            if (data.respiratory_rate) {
+                text += `\n💨 Kadar Pernafasan: ${data.respiratory_rate} breaths/min`;
+            }
+            if (data.etco2) {
+                text += `\n🫧 EtCO₂: ${data.etco2} mmHg`;
+            }
+            if (data.cvp) {
+                text += `\n💉 CVP: ${data.cvp} mmHg`;
+            }
+            if (data.icp) {
+                text += `\n🧠 ICP: ${data.icp} mmHg`;
             }
             
             return text;
@@ -444,6 +498,11 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
             const map = parseInt(document.getElementById('map').value);
             const pr = parseInt(document.getElementById('pr').value);
             const spo2 = document.getElementById('spo2').value ? parseInt(document.getElementById('spo2').value) : null;
+            const temperature = document.getElementById('temperature').value ? parseFloat(document.getElementById('temperature').value) : null;
+            const respiratory_rate = document.getElementById('respiratory_rate').value ? parseInt(document.getElementById('respiratory_rate').value) : null;
+            const etco2 = document.getElementById('etco2').value ? parseInt(document.getElementById('etco2').value) : null;
+            const cvp = document.getElementById('cvp').value ? parseInt(document.getElementById('cvp').value) : null;
+            const icp = document.getElementById('icp').value ? parseInt(document.getElementById('icp').value) : null;
             
             if (!systolic || !diastolic || !map || !pr) {
                 showMessage('❌ Sila lengkapkan: Systolic, Diastolic, MAP dan Nadi', 'red');
@@ -478,6 +537,11 @@ $telegram_config = $stmt->fetch(PDO::FETCH_ASSOC);
                     map: map,
                     pr: pr,
                     spo2: spo2,
+                    temperature: temperature,
+                    respiratory_rate: respiratory_rate,
+                    etco2: etco2,
+                    cvp: cvp,
+                    icp: icp,
                     image_path: uploadData.image_path
                 };
                 
